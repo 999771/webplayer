@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多媒体播放器</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flv.js/dist/flv.min.js"></script>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'><path fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' d='M18.76 17.75v14.66a1 1 0 0 0 1.06 1a1.06 1.06 0 0 0 .57-.17L31.2 26a1 1 0 0 0 .29-1.44a1.3 1.3 0 0 0-.29-.29l-10.8-7.39a1 1 0 0 0-1.64.87'/><path fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round' d='M21.87 5.75a19.43 19.43 0 1 0 21.56 19.32'/><circle cx='24' cy='5.63' r='2.13' fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+    <style>
+        :root {
+            --primary: #3498db;
+            --secondary: #2ecc71;
+            --accent: #e74c3c;
+            --light: #f8f9fa;
+            --dark: #2c3e50;
+            --gray: #95a5a6;
+            --light-gray: #e0e6ed;
+            --shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            --transition: all 0.3s ease;
+            --texture: repeating-linear-gradient(
+                45deg,
+                rgba(0, 0, 0, 0.02),
+                rgba(0, 0, 0, 0.02) 1px,
+                transparent 1px,
+                transparent 6px
+            );
+            --green: #27ae60;
+            --orange: #f39c12;
+            --red: #e74c3c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #eef2f5 0%, #d9e4f0 100%);
+            color: var(--dark);
+            min-height: 100vh;
+            line-height: 1.6;
+            padding: 20px;
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--texture);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* 拟物化头部样式 */
+        .tool-header {
+            text-align: center;
+            margin: 30px 0 40px;
+        }
+
+        .tool-title {
+            font-size: 2.5rem;
+            color: var(--dark);
+            margin-bottom: 20px;
+            position: relative;
+            display: inline-block;
+            font-weight: 800;
+            text-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .tool-title::after {
+            content: '';
+            position: absolute;
+            bottom: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 6px;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            border-radius: 4px;
+            box-shadow: 0 3px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .tool-subtitle {
+            color: var(--dark);
+            max-width: 800px;
+            margin: 5px auto 0;
+            font-size: 1.2rem;
+            font-weight: lighter;
+            padding: 15px 25px;
+            border-radius: 50px;
+            backdrop-filter: blur(4px);
+        }
+
+        /* 输入区域 */
+        .input-container {
+            max-width: 1000px;
+            margin: 0 auto 50px;
+            position: relative;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 15px;
+        }
+
+        .url-input-wrapper {
+            position: relative;
+            flex: 1;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 17px 50px 17px 25px;
+            border: none;
+            border-radius: 50px;
+            background: white;
+            color: var(--dark);
+            font-size: 1.1rem;
+            box-shadow:
+                inset 0 -3px 10px rgba(0, 0, 0, 0.1),
+                0 8px 20px rgba(0, 0, 0, 0.08);
+            transition: var(--transition);
+            border: 2px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow:
+                inset 0 -3px 10px rgba(0, 0, 0, 0.1),
+                0 8px 20px rgba(52, 152, 219, 0.2),
+                0 0 0 3px rgba(52, 152, 219, 0.2);
+        }
+
+        .url-input::placeholder {
+            color: var(--gray);
+        }
+
+        /* 清除按钮 */
+        .clear-btn {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--gray);
+            font-size: 1.2rem;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: var(--transition);
+            padding: 5px;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .clear-btn:hover {
+            opacity: 1;
+            background: rgba(0, 0, 0, 0.05);
+            color: var(--accent);
+        }
+
+        .play-btn, .replay-btn {
+            background: linear-gradient(145deg, #f0f0f0, #ffffff);
+            color: var(--dark);
+            border: none;
+            border-radius: 50px;
+            padding: 0 35px;
+            font-size: 1.1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            box-shadow:
+                inset 0 -3px 10px rgba(0, 0, 0, 0.1),
+                0 8px 20px rgba(0, 0, 0, 0.08);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+        }
+
+        .play-btn::before, .replay-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            opacity: 0;
+            transition: var(--transition);
+            z-index: 0;
+        }
+
+        .play-btn:hover, .replay-btn:hover {
+            transform: translateY(-3px);
+            box-shadow:
+                inset 0 -3px 10px rgba(0, 0, 0, 0.1),
+                0 12px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .play-btn:hover::before, .replay-btn:hover::before {
+            opacity: 1;
+        }
+
+        .play-btn:hover span, .play-btn:hover i,
+        .replay-btn:hover span, .replay-btn:hover i {
+            color: white;
+            position: relative;
+            z-index: 1;
+        }
+
+        .play-btn:active, .replay-btn:active {
+            transform: translateY(1px);
+            box-shadow:
+                inset 0 3px 8px rgba(0, 0, 0, 0.15),
+                0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .play-btn span, .replay-btn span {
+            position: relative;
+            z-index: 1;
+            color: var(--primary);
+        }
+
+        .play-btn i, .replay-btn i {
+            position: relative;
+            z-index: 1;
+            color: var(--primary);
+        }
+
+        /* 播放器区域 - 增大尺寸 */
+        .player-container {
+            background: linear-gradient(145deg, #f5f7fa, #e4edf5);
+            border-radius: 24px;
+            padding: 30px;
+            box-shadow:
+                inset 0 -8px 25px rgba(0, 0, 0, 0.05),
+                0 20px 50px rgba(0, 0, 0, 0.15);
+            margin: 60px auto;
+            position: relative;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            display: none;
+            max-width: 1300px;
+            width: 95%;
+        }
+
+        .player-container::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            bottom: 10px;
+            border-radius: 18px;
+            background: linear-gradient(145deg, #ffffff, #f0f4f9);
+            z-index: 0;
+            box-shadow:
+                inset 0 3px 10px rgba(0, 0, 0, 0.05),
+                0 5px 15px rgba(0, 0, 0, 0.05);
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            margin-bottom: 20px;
+            border-radius: 18px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
+            min-height: 600px;
+        }
+
+        #videoPlayer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            outline: none;
+        }
+
+        .player-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 1;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .control-btn {
+            padding: 12px 20px;
+            background: linear-gradient(145deg, #f0f0f0, #ffffff);
+            color: var(--dark);
+            border: none;
+            border-radius: 18px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow:
+                inset 0 -3px 10px rgba(0, 0, 0, 0.1),
+                0 8px 20px rgba(0, 0, 0, 0.08);
+            position: relative;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            white-space: nowrap;
+        }
+
+        .control-btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            opacity: 0;
+            transition: var(--transition);
+            z-index: 0;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-5px);
+            box-shadow:
+                inset 0 -3px 10px rgba(0, 0, 0, 0.1),
+                0 12px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-btn:hover::before {
+            opacity: 1;
+        }
+
+        .control-btn:hover span, .control-btn:hover i {
+            color: white;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 顶部悬浮消息 */
+        .top-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 30px;
+            border-radius: 50px;
+            text-align: center;
+            display: none;
+            font-weight: 600;
+            z-index: 1000;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            animation: slideDown 0.3s ease-out;
+            max-width: 90%;
+        }
+
+        @keyframes slideDown {
+            from {
+                top: -50px;
+                opacity: 0;
+            }
+            to {
+                top: 20px;
+                opacity: 1;
+            }
+        }
+
+        .top-error-message {
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid rgba(231, 76, 60, 0.3);
+            color: var(--accent);
+        }
+
+        .top-success-message {
+            background: rgba(255, 255, 255, 0.95);
+            border: 2px solid rgba(46, 204, 113, 0.3);
+            color: var(--green);
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 1200px) {
+            .container {
+                max-width: 100%;
+                padding: 0 20px;
+            }
+            
+            .player-container {
+                max-width: 95%;
+            }
+        }
+
+        @media (max-width: 900px) {
+            .tool-title {
+                font-size: 2.2rem;
+            }
+
+            .tool-subtitle {
+                font-size: 1.1rem;
+                padding: 12px 20px;
+            }
+            
+            .video-wrapper {
+                min-height: 450px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .tool-title {
+                font-size: 1.9rem;
+            }
+
+            .input-group {
+                flex-direction: column;
+            }
+
+            .url-input-wrapper, .play-btn, .replay-btn {
+                width: 100%;
+            }
+
+            .play-btn, .replay-btn {
+                padding: 17px;
+                justify-content: center;
+            }
+
+            .player-controls {
+                flex-direction: row;
+                overflow-x: auto;
+                padding-bottom: 10px;
+                justify-content: flex-start;
+            }
+
+            .control-btn {
+                flex-shrink: 0;
+            }
+            
+            .video-wrapper {
+                min-height: 350px;
+            }
+        }
+
+        @media (max-width: 580px) {
+            .tool-title {
+                font-size: 1.7rem;
+            }
+
+            .tool-subtitle {
+                font-size: 1rem;
+            }
+            
+            .video-wrapper {
+                min-height: 250px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部悬浮消息 -->
+    <div class="top-message top-error-message" id="topErrorMessage"></div>
+    <div class="top-message top-success-message" id="topSuccessMessage"></div>
+
+    <div class="container">
+        <!-- 工具标题 -->
+        <div class="tool-header">
+            <h2 class="tool-title">多媒体播放器</h2>
+            <p class="tool-subtitle">
+                支持播放m3u8、flv、mp4等多种格式的媒体文件。
+                输入媒体文件URL，点击播放按钮开始播放。
+            </p>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="input-container">
+            <div class="input-group">
+                <!-- 添加输入框包装器 -->
+                <div class="url-input-wrapper">
+                    <input type="text" id="mediaUrl" class="url-input" placeholder="输入媒体文件URL">
+                    <!-- 添加清除按钮 -->
+                    <button id="clearInput" class="clear-btn">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <button id="playBtn" class="play-btn">
+                    <i class="fas fa-play"></i>
+                    <span>播放</span>
+                </button>
+                <button id="replayBtn" class="replay-btn">
+                    <i class="fas fa-redo"></i>
+                    <span>重播</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 播放器区域 -->
+        <div class="player-container" id="playerContainer">
+            <div class="video-wrapper">
+                <video id="videoPlayer" controls></video>
+            </div>
+            <div class="player-controls">
+                <button class="control-btn" id="rewindBtn">
+                    <i class="fas fa-backward"></i>
+                    <span>快退</span>
+                </button>
+                <button class="control-btn" id="pauseBtn">
+                    <i class="fas fa-pause"></i>
+                    <span>暂停</span>
+                </button>
+                <button class="control-btn" id="forwardBtn">
+                    <i class="fas fa-forward"></i>
+                    <span>快进</span>
+                </button>
+                <button class="control-btn" id="volumeUpBtn">
+                    <i class="fas fa-volume-up"></i>
+                    <span>音量+</span>
+                </button>
+                <button class="control-btn" id="volumeDownBtn">
+                    <i class="fas fa-volume-down"></i>
+                    <span>音量-</span>
+                </button>
+                <button class="control-btn" id="muteBtn">
+                    <i class="fas fa-volume-mute"></i>
+                    <span>静音</span>
+                </button>
+                <button class="control-btn" id="fullscreenBtn">
+                    <i class="fas fa-expand"></i>
+                    <span>全屏</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM元素
+            const mediaUrlInput = document.getElementById('mediaUrl');
+            const playBtn = document.getElementById('playBtn');
+            const replayBtn = document.getElementById('replayBtn');
+            const videoPlayer = document.getElementById('videoPlayer');
+            const playerContainer = document.getElementById('playerContainer');
+            const topErrorMessage = document.getElementById('topErrorMessage');
+            const topSuccessMessage = document.getElementById('topSuccessMessage');
+            const clearInputBtn = document.getElementById('clearInput');
+            const fullscreenBtn = document.getElementById('fullscreenBtn');
+            const volumeUpBtn = document.getElementById('volumeUpBtn');
+            const volumeDownBtn = document.getElementById('volumeDownBtn');
+            const muteBtn = document.getElementById('muteBtn');
+            const rewindBtn = document.getElementById('rewindBtn');
+            const forwardBtn = document.getElementById('forwardBtn');
+            const pauseBtn = document.getElementById('pauseBtn');
+
+            // 全局变量
+            let hls = null;
+            let flvPlayer = null;
+            let isFullscreen = false;
+            let isPlaying = false;
+            let currentMediaUrl = '';
+
+            // 绑定事件
+            playBtn.addEventListener('click', playMedia);
+            replayBtn.addEventListener('click', replayMedia);
+            clearInputBtn.addEventListener('click', clearInput);
+            mediaUrlInput.addEventListener('input', toggleClearButton);
+            fullscreenBtn.addEventListener('click', toggleFullscreen);
+            volumeUpBtn.addEventListener('click', increaseVolume);
+            volumeDownBtn.addEventListener('click', decreaseVolume);
+            muteBtn.addEventListener('click', toggleMute);
+            rewindBtn.addEventListener('click', rewindMedia);
+            forwardBtn.addEventListener('click', forwardMedia);
+            pauseBtn.addEventListener('click', togglePause);
+            videoPlayer.addEventListener('play', () => {
+                isPlaying = true;
+                pauseBtn.innerHTML = '<i class="fas fa-pause"></i><span>暂停</span>';
+                showSuccess('媒体开始播放');
+            });
+            videoPlayer.addEventListener('pause', () => {
+                isPlaying = false;
+                pauseBtn.innerHTML = '<i class="fas fa-play"></i><span>播放</span>';
+                showSuccess('媒体已暂停');
+            });
+            videoPlayer.addEventListener('ended', () => {
+                isPlaying = false;
+                pauseBtn.innerHTML = '<i class="fas fa-play"></i><span>播放</span>';
+                showSuccess('媒体播放结束');
+            });
+            document.addEventListener('fullscreenchange', handleFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+            document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+            document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+            // 初始化播放器
+            playerContainer.style.display = 'none';
+
+            // 播放媒体
+            async function playMedia() {
+                const mediaUrl = mediaUrlInput.value.trim();
+
+                // 验证URL
+                if (!mediaUrl) {
+                    showError('请输入媒体文件URL');
+                    return;
+                }
+
+                // 停止当前播放
+                stopMedia();
+
+                try {
+                    // 检查URL类型
+                    const url = new URL(mediaUrl);
+                    const pathname = url.pathname.toLowerCase();
+                    
+                    if (pathname.endsWith('.m3u8') || mediaUrl.includes('.m3u8?')) {
+                        // 处理m3u8流
+                        if (Hls.isSupported()) {
+                            hls = new Hls();
+                            hls.loadSource(mediaUrl);
+                            hls.attachMedia(videoPlayer);
+                            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                                videoPlayer.play();
+                                currentMediaUrl = mediaUrl;
+                                showPlayer();
+                                showSuccess('HLS流开始播放');
+                            });
+                            hls.on(Hls.Events.ERROR, (event, data) => {
+                                if (data.fatal) {
+                                    showError(`HLS播放错误: ${data.type}`);
+                                    stopMedia();
+                                }
+                            });
+                        } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                            // Safari原生支持HLS
+                            videoPlayer.src = mediaUrl;
+                            videoPlayer.addEventListener('loadedmetadata', () => {
+                                videoPlayer.play();
+                                currentMediaUrl = mediaUrl;
+                                showPlayer();
+                                showSuccess('HLS流开始播放 (Safari原生支持)');
+                            });
+                        } else {
+                            throw new Error('您的浏览器不支持HLS播放');
+                        }
+                    } else if (pathname.endsWith('.flv') || mediaUrl.includes('.flv?')) {
+                        // 处理FLV流
+                        if (flvjs.isSupported()) {
+                            flvPlayer = flvjs.createPlayer({
+                                type: 'flv',
+                                url: mediaUrl
+                            });
+                            flvPlayer.attachMediaElement(videoPlayer);
+                            flvPlayer.load();
+                            flvPlayer.play();
+                            currentMediaUrl = mediaUrl;
+                            showPlayer();
+                            showSuccess('FLV流开始播放');
+                        } else {
+                            throw new Error('您的浏览器不支持FLV播放');
+                        }
+                    } else if (pathname.match(/\.(mp4|webm|ogg|mov|avi|wmv|mkv|mpg|mpeg)$/i) || 
+                              mediaUrl.match(/\.(mp4|webm|ogg|mov|avi|wmv|mkv|mpg|mpeg)\?/i)) {
+                        // 处理常规视频文件
+                        videoPlayer.src = mediaUrl;
+                        videoPlayer.load();
+                        videoPlayer.play();
+                        currentMediaUrl = mediaUrl;
+                        showPlayer();
+                        showSuccess('视频开始播放');
+                    } else {
+                        // 尝试直接作为视频源播放
+                        videoPlayer.src = mediaUrl;
+                        videoPlayer.load();
+                        videoPlayer.play().then(() => {
+                            currentMediaUrl = mediaUrl;
+                            showPlayer();
+                            showSuccess('尝试播放媒体成功');
+                        }).catch(error => {
+                            showError('无法播放该媒体格式，请检查URL是否正确');
+                            console.error('播放错误:', error);
+                        });
+                    }
+                } catch (error) {
+                    console.error('播放错误:', error);
+                    showError(`播放失败: ${error.message}`);
+                }
+            }
+
+            // 重播媒体
+            function replayMedia() {
+                if (currentMediaUrl) {
+                    videoPlayer.currentTime = 0;
+                    videoPlayer.play();
+                    showSuccess('重新开始播放');
+                } else {
+                    showError('没有可重播的媒体');
+                }
+            }
+
+            // 显示播放器
+            function showPlayer() {
+                playerContainer.style.display = 'block';
+                // 滚动到播放器位置
+                setTimeout(() => {
+                    playerContainer.scrollIntoView({ 
+                        behavior: 'smooth', 
+                        block: 'center' 
+                    });
+                }, 100);
+            }
+
+            // 停止播放
+            function stopMedia() {
+                if (hls) {
+                    hls.destroy();
+                    hls = null;
+                }
+                
+                if (flvPlayer) {
+                    flvPlayer.destroy();
+                    flvPlayer = null;
+                }
+                
+                videoPlayer.pause();
+                videoPlayer.removeAttribute('src');
+                videoPlayer.load();
+                
+                currentMediaUrl = '';
+                
+                showSuccess('媒体已停止');
+            }
+
+            // 快退10秒
+            function rewindMedia() {
+                if (videoPlayer.currentTime > 10) {
+                    videoPlayer.currentTime -= 10;
+                } else {
+                    videoPlayer.currentTime = 0;
+                }
+                showSuccess('快退10秒');
+            }
+
+            // 快进10秒
+            function forwardMedia() {
+                videoPlayer.currentTime += 10;
+                showSuccess('快进10秒');
+            }
+
+            // 切换暂停/播放
+            function togglePause() {
+                if (isPlaying) {
+                    videoPlayer.pause();
+                } else {
+                    videoPlayer.play();
+                }
+            }
+
+            // 清除输入框内容
+            function clearInput() {
+                mediaUrlInput.value = '';
+                mediaUrlInput.focus();
+                clearInputBtn.style.display = 'none';
+                // 不再隐藏播放器
+            }
+
+            // 根据输入内容显示/隐藏清除按钮
+            function toggleClearButton() {
+                if (mediaUrlInput.value.trim() !== '') {
+                    clearInputBtn.style.display = 'flex';
+                } else {
+                    clearInputBtn.style.display = 'none';
+                }
+            }
+
+            // 切换全屏 - 现在直接对video元素操作
+            function toggleFullscreen() {
+                if (!isFullscreen) {
+                    if (videoPlayer.requestFullscreen) {
+                        videoPlayer.requestFullscreen();
+                    } else if (videoPlayer.webkitRequestFullscreen) {
+                        videoPlayer.webkitRequestFullscreen();
+                    } else if (videoPlayer.msRequestFullscreen) {
+                        videoPlayer.msRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }
+                }
+            }
+
+            // 处理全屏状态变化
+            function handleFullscreenChange() {
+                isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+                // 退出全屏后重新定位播放器
+                if (!isFullscreen) {
+                    setTimeout(() => {
+                        playerContainer.scrollIntoView({ 
+                            behavior: 'smooth', 
+                            block: 'center' 
+                        });
+                    }, 100);
+                }
+            }
+
+            // 增加音量
+            function increaseVolume() {
+                if (videoPlayer.volume < 1) {
+                    videoPlayer.volume = Math.min(1, videoPlayer.volume + 0.1);
+                }
+                showSuccess(`音量: ${Math.round(videoPlayer.volume * 100)}%`);
+            }
+
+            // 减小音量
+            function decreaseVolume() {
+                if (videoPlayer.volume > 0) {
+                    videoPlayer.volume = Math.max(0, videoPlayer.volume - 0.1);
+                }
+                showSuccess(`音量: ${Math.round(videoPlayer.volume * 100)}%`);
+            }
+
+            // 切换静音
+            function toggleMute() {
+                videoPlayer.muted = !videoPlayer.muted;
+                showSuccess(videoPlayer.muted ? '已静音' : '已取消静音');
+            }
+
+            // 显示错误消息
+            function showError(message) {
+                topErrorMessage.textContent = message;
+                topErrorMessage.style.display = 'block';
+                topSuccessMessage.style.display = 'none';
+
+                // 3秒后自动隐藏
+                setTimeout(() => {
+                    topErrorMessage.style.display = 'none';
+                }, 3000);
+            }
+
+            // 显示成功消息
+            function showSuccess(message) {
+                topSuccessMessage.textContent = message;
+                topSuccessMessage.style.display = 'block';
+                topErrorMessage.style.display = 'none';
+
+                // 3秒后自动隐藏
+                setTimeout(() => {
+                    topSuccessMessage.style.display = 'none';
+                }, 3000);
+            }
+        });
+    </script>
+</body>
+</html>
