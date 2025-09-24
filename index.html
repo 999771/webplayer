@@ -518,73 +518,117 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // DOM元素
-            const mediaUrlInput = document.getElementById('mediaUrl');
-            const playBtn = document.getElementById('playBtn');
-            const replayBtn = document.getElementById('replayBtn');
-            const videoPlayer = document.getElementById('videoPlayer');
-            const playerContainer = document.getElementById('playerContainer');
-            const topErrorMessage = document.getElementById('topErrorMessage');
-            const topSuccessMessage = document.getElementById('topSuccessMessage');
-            const clearInputBtn = document.getElementById('clearInput');
-            const fullscreenBtn = document.getElementById('fullscreenBtn');
-            const volumeUpBtn = document.getElementById('volumeUpBtn');
-            const volumeDownBtn = document.getElementById('volumeDownBtn');
-            const muteBtn = document.getElementById('muteBtn');
-            const rewindBtn = document.getElementById('rewindBtn');
-            const forwardBtn = document.getElementById('forwardBtn');
-            const pauseBtn = document.getElementById('pauseBtn');
+            // DOM元素缓存
+            const elements = {
+                mediaUrlInput: document.getElementById('mediaUrl'),
+                playBtn: document.getElementById('playBtn'),
+                replayBtn: document.getElementById('replayBtn'),
+                videoPlayer: document.getElementById('videoPlayer'),
+                playerContainer: document.getElementById('playerContainer'),
+                topErrorMessage: document.getElementById('topErrorMessage'),
+                topSuccessMessage: document.getElementById('topSuccessMessage'),
+                clearInputBtn: document.getElementById('clearInput'),
+                fullscreenBtn: document.getElementById('fullscreenBtn'),
+                volumeUpBtn: document.getElementById('volumeUpBtn'),
+                volumeDownBtn: document.getElementById('volumeDownBtn'),
+                muteBtn: document.getElementById('muteBtn'),
+                rewindBtn: document.getElementById('rewindBtn'),
+                forwardBtn: document.getElementById('forwardBtn'),
+                pauseBtn: document.getElementById('pauseBtn')
+            };
 
-            // 全局变量
-            let hls = null;
-            let isFullscreen = false;
-            let isPlaying = false;
-            let currentMediaUrl = '';
+            // 定义需要检测的关键词列表
+            const keywords = [
+                'lz', 'ly', 'play', 'maoyan', 'vod', 'qd', 'vip', 'ry', 
+                'daayee', 'cdn', 'yz', 'yy', 'ff', 'tao', 'long', 'ss', 
+                'bf', 'jisu', 'fentv', 'uk', 'gsuus', 'wl', 'ikun', 
+                'xingchongwang', 'cnd', 'yuglf'
+            ];
+
+            // 全局状态管理
+            const state = {
+                hls: null,
+                isFullscreen: false,
+                isPlaying: false,
+                currentMediaUrl: '',
+                parsedUrl: '' // 存储解析后的URL
+            };
 
             // 初始化清除按钮状态
             toggleClearButton();
 
-            // 绑定事件
-            playBtn.addEventListener('click', playMedia);
-            replayBtn.addEventListener('click', replayMedia);
-            clearInputBtn.addEventListener('click', clearInput);
-            mediaUrlInput.addEventListener('input', toggleClearButton);
-            fullscreenBtn.addEventListener('click', toggleFullscreen);
-            volumeUpBtn.addEventListener('click', increaseVolume);
-            volumeDownBtn.addEventListener('click', decreaseVolume);
-            muteBtn.addEventListener('click', toggleMute);
-            rewindBtn.addEventListener('click', rewindMedia);
-            forwardBtn.addEventListener('click', forwardMedia);
-            pauseBtn.addEventListener('click', togglePause);
-            videoPlayer.addEventListener('play', () => {
-                isPlaying = true;
-                pauseBtn.innerHTML = '<i class="fas fa-pause"></i><span>暂停</span>';
-                showSuccess('媒体开始播放');
+            // 事件绑定 - 使用对象统一管理
+            const eventListeners = [
+                { element: elements.playBtn, event: 'click', handler: playMedia },
+                { element: elements.replayBtn, event: 'click', handler: replayMedia },
+                { element: elements.clearInputBtn, event: 'click', handler: clearInput },
+                { element: elements.mediaUrlInput, event: 'input', handler: toggleClearButton },
+                { element: elements.fullscreenBtn, event: 'click', handler: toggleFullscreen },
+                { element: elements.volumeUpBtn, event: 'click', handler: increaseVolume },
+                { element: elements.volumeDownBtn, event: 'click', handler: decreaseVolume },
+                { element: elements.muteBtn, event: 'click', handler: toggleMute },
+                { element: elements.rewindBtn, event: 'click', handler: rewindMedia },
+                { element: elements.forwardBtn, event: 'click', handler: forwardMedia },
+                { element: elements.pauseBtn, event: 'click', handler: togglePause },
+                { element: elements.videoPlayer, event: 'play', handler: handleVideoPlay },
+                { element: elements.videoPlayer, event: 'pause', handler: handleVideoPause },
+                { element: elements.videoPlayer, event: 'ended', handler: handleVideoEnded },
+                { element: document, event: 'fullscreenchange', handler: handleFullscreenChange },
+                { element: document, event: 'webkitfullscreenchange', handler: handleFullscreenChange },
+                { element: document, event: 'mozfullscreenchange', handler: handleFullscreenChange },
+                { element: document, event: 'MSFullscreenChange', handler: handleFullscreenChange }
+            ];
+
+            // 批量绑定事件
+            eventListeners.forEach(({ element, event, handler }) => {
+                element.addEventListener(event, handler);
             });
-            videoPlayer.addEventListener('pause', () => {
-                isPlaying = false;
-                pauseBtn.innerHTML = '<i class="fas fa-play"></i><span>播放</span>';
-                showSuccess('媒体已暂停');
-            });
-            videoPlayer.addEventListener('ended', () => {
-                isPlaying = false;
-                pauseBtn.innerHTML = '<i class="fas fa-play"></i><span>播放</span>';
-                showSuccess('媒体播放结束');
-            });
-            document.addEventListener('fullscreenchange', handleFullscreenChange);
-            document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-            document.addEventListener('mozfullscreenchange', handleFullscreenChange);
-            document.addEventListener('MSFullscreenChange', handleFullscreenChange);
 
             // 初始化播放器
-            playerContainer.style.display = 'none';
+            elements.playerContainer.style.display = 'none';
+
+            // 检查URL是否包含任何关键词
+            function containsAnyKeyword(url) {
+                const lowerUrl = url.toLowerCase();
+                return keywords.some(keyword => lowerUrl.includes(keyword.toLowerCase()));
+            }
+
+            // 调用API解析URL
+            async function parseUrlWithApi(originalUrl) {
+                try {
+                    showSuccess('正在解析视频地址...');
+                    
+                    // 构建API请求URL
+                    const apiUrl = `https://api.jkyai.top/API/zyzqcb.php?url=${encodeURIComponent(originalUrl)}`;
+                    
+                    // 发送请求
+                    const response = await fetch(apiUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`API请求失败: ${response.status}`);
+                    }
+                    
+                    const data = await response.json();
+                    
+                    if (data.code !== 200 || !data.url) {
+                        throw new Error(`解析失败: ${data.msg || '未知错误'}`);
+                    }
+                    
+                    showSuccess('视频地址解析成功');
+                    return data.url;
+                } catch (error) {
+                    console.error('API解析错误:', error);
+                    showError(`解析失败: ${error.message}`);
+                    return null;
+                }
+            }
 
             // 播放媒体
             async function playMedia() {
-                const mediaUrl = mediaUrlInput.value.trim();
+                const originalUrl = elements.mediaUrlInput.value.trim();
 
                 // 验证URL
-                if (!mediaUrl) {
+                if (!originalUrl) {
                     showError('请输入m3u8文件URL');
                     return;
                 }
@@ -599,37 +643,45 @@
                 stopMedia();
 
                 try {
+                    // 确定最终播放的URL
+                    let playUrl = originalUrl;
+                    
+                    // 检查是否包含关键词，如果是则调用API解析
+                    if (containsAnyKeyword(originalUrl)) {
+                        const parsedUrl = await parseUrlWithApi(originalUrl);
+                        if (!parsedUrl) {
+                            // 解析失败，尝试直接播放原始URL
+                            showError('解析失败，尝试直接播放原始URL');
+                        } else {
+                            playUrl = parsedUrl;
+                            state.parsedUrl = parsedUrl;
+                        }
+                    }
+                    
+                    state.currentMediaUrl = originalUrl;
+                    
                     // 处理m3u8流
                     if (Hls.isSupported()) {
-                        // 使用自定义Loader配置
-                        const config = {
-                            loader: CustomHlsJsLoader
-                        };
-                        hls = new Hls(config);
-                        hls.loadSource(mediaUrl);
-                        hls.attachMedia(videoPlayer);
-                        hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                            videoPlayer.play();
-                            currentMediaUrl = mediaUrl;
+                        state.hls = new Hls();
+                        state.hls.loadSource(playUrl);
+                        state.hls.attachMedia(elements.videoPlayer);
+                        
+                        state.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                            elements.videoPlayer.play();
                             showPlayer();
                             showSuccess('M3U8流开始播放');
                         });
-                        hls.on(Hls.Events.ERROR, (event, data) => {
+                        
+                        state.hls.on(Hls.Events.ERROR, (event, data) => {
                             if (data.fatal) {
                                 showError(`M3U8播放错误: ${data.type}`);
                                 stopMedia();
                             }
                         });
-                    } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                    } else if (elements.videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
                         // Safari原生支持HLS
-                        videoPlayer.src = mediaUrl;
-
-                        videoPlayer.addEventListener('loadedmetadata', () => {
-                            videoPlayer.play();
-                            currentMediaUrl = mediaUrl;
-                            showPlayer();
-                            showSuccess('M3U8流开始播放 (Safari原生支持)');
-                        });
+                        elements.videoPlayer.src = playUrl;
+                        elements.videoPlayer.addEventListener('loadedmetadata', onVideoLoadedMetadata);
                     } else {
                         throw new Error('您的浏览器不支持M3U8播放');
                     }
@@ -639,11 +691,20 @@
                 }
             }
 
+            // 视频元数据加载完成处理函数
+            function onVideoLoadedMetadata() {
+                elements.videoPlayer.play();
+                showPlayer();
+                showSuccess('M3U8流开始播放 (Safari原生支持)');
+                // 移除事件监听，避免重复触发
+                elements.videoPlayer.removeEventListener('loadedmetadata', onVideoLoadedMetadata);
+            }
+
             // 重播媒体
             function replayMedia() {
-                if (currentMediaUrl) {
-                    videoPlayer.currentTime = 0;
-                    videoPlayer.play();
+                if (state.currentMediaUrl) {
+                    elements.videoPlayer.currentTime = 0;
+                    elements.videoPlayer.play();
                     showSuccess('重新开始播放');
                 } else {
                     showError('没有可重播的媒体');
@@ -652,9 +713,9 @@
 
             // 显示播放器
             function showPlayer() {
-                playerContainer.style.display = 'block';
+                elements.playerContainer.style.display = 'block';
                 // 滚动到播放器位置
-                playerContainer.scrollIntoView({ 
+                elements.playerContainer.scrollIntoView({ 
                     behavior: 'smooth', 
                     block: 'center' 
                 });
@@ -662,64 +723,61 @@
 
             // 停止播放
             function stopMedia() {
-                if (hls) {
-                    hls.destroy();
-                    hls = null;
+                if (state.hls) {
+                    state.hls.destroy();
+                    state.hls = null;
                 }
                 
-                videoPlayer.pause();
-                videoPlayer.removeAttribute('src');
-                videoPlayer.load();
+                elements.videoPlayer.pause();
+                elements.videoPlayer.removeAttribute('src');
+                elements.videoPlayer.load();
                 
-                currentMediaUrl = '';
+                state.currentMediaUrl = '';
+                state.parsedUrl = '';
             }
 
             // 快退10秒
             function rewindMedia() {
-                if (videoPlayer.currentTime > 10) {
-                    videoPlayer.currentTime -= 10;
-                } else {
-                    videoPlayer.currentTime = 0;
-                }
+                elements.videoPlayer.currentTime = Math.max(0, elements.videoPlayer.currentTime - 10);
                 showSuccess('快退10秒');
             }
 
             // 快进10秒
             function forwardMedia() {
-                videoPlayer.currentTime += 10;
+                elements.videoPlayer.currentTime += 10;
                 showSuccess('快进10秒');
             }
 
             // 切换暂停/播放
             function togglePause() {
-                if (isPlaying) {
-                    videoPlayer.pause();
+                if (state.isPlaying) {
+                    elements.videoPlayer.pause();
                 } else {
-                    videoPlayer.play();
+                    elements.videoPlayer.play();
                 }
             }
 
             // 清除输入框内容
             function clearInput() {
-                mediaUrlInput.value = '';
-                mediaUrlInput.focus();
+                elements.mediaUrlInput.value = '';
+                elements.mediaUrlInput.focus();
                 toggleClearButton();
             }
 
             // 根据输入内容显示/隐藏清除按钮
             function toggleClearButton() {
-                clearInputBtn.style.display = mediaUrlInput.value.trim() !== '' ? 'flex' : 'none';
+                elements.clearInputBtn.style.display = elements.mediaUrlInput.value.trim() !== '' ? 'flex' : 'none';
             }
 
             // 切换全屏
             function toggleFullscreen() {
-                if (!isFullscreen) {
-                    if (videoPlayer.requestFullscreen) {
-                        videoPlayer.requestFullscreen();
-                    } else if (videoPlayer.webkitRequestFullscreen) {
-                        videoPlayer.webkitRequestFullscreen();
-                    } else if (videoPlayer.msRequestFullscreen) {
-                        videoPlayer.msRequestFullscreen();
+                if (!state.isFullscreen) {
+                    if (elements.videoPlayer.requestFullscreen) {
+                        elements.videoPlayer.requestFullscreen();
+                    } else if (elements.videoPlayer.webkitRequestFullscreen) {
+                        elements.videoPlayer.webkitRequestFullscreen();
+                    } else if (elements.videoPlayer.msRequestFullscreen) {
+                        elements.videoPlayer.msRequestFullscreen();
                     }
                 } else {
                     if (document.exitFullscreen) {
@@ -734,13 +792,13 @@
 
             // 处理全屏状态变化
             function handleFullscreenChange() {
-                isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
-                if (!isFullscreen) {
+                state.isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement || document.msFullscreenElement);
+                if (!state.isFullscreen) {
                     // 确保退出全屏后播放器居中显示
                     setTimeout(() => {
-                        playerContainer.style.display = currentMediaUrl ? 'block' : 'none';
-                        if (currentMediaUrl) {
-                            playerContainer.scrollIntoView({
+                        elements.playerContainer.style.display = state.currentMediaUrl ? 'block' : 'none';
+                        if (state.currentMediaUrl) {
+                            elements.playerContainer.scrollIntoView({
                                 behavior: 'smooth',
                                 block: 'center'
                             });
@@ -751,92 +809,65 @@
 
             // 增加音量
             function increaseVolume() {
-                if (videoPlayer.volume < 1) {
-                    videoPlayer.volume = Math.min(1, videoPlayer.volume + 0.1);
-                }
-                showSuccess(`音量: ${Math.round(videoPlayer.volume * 100)}%`);
+                elements.videoPlayer.volume = Math.min(1, elements.videoPlayer.volume + 0.1);
+                showSuccess(`音量: ${Math.round(elements.videoPlayer.volume * 100)}%`);
             }
 
             // 减小音量
             function decreaseVolume() {
-                if (videoPlayer.volume > 0) {
-                    videoPlayer.volume = Math.max(0, videoPlayer.volume - 0.1);
-                }
-                showSuccess(`音量: ${Math.round(videoPlayer.volume * 100)}%`);
+                elements.videoPlayer.volume = Math.max(0, elements.videoPlayer.volume - 0.1);
+                showSuccess(`音量: ${Math.round(elements.videoPlayer.volume * 100)}%`);
             }
 
             // 切换静音
             function toggleMute() {
-                videoPlayer.muted = !videoPlayer.muted;
-                showSuccess(videoPlayer.muted ? '已静音' : '已取消静音');
+                elements.videoPlayer.muted = !elements.videoPlayer.muted;
+                showSuccess(elements.videoPlayer.muted ? '已静音' : '已取消静音');
+            }
+
+            // 视频播放处理
+            function handleVideoPlay() {
+                state.isPlaying = true;
+                elements.pauseBtn.innerHTML = '<i class="fas fa-pause"></i><span>暂停</span>';
+                showSuccess('媒体开始播放');
+            }
+
+            // 视频暂停处理
+            function handleVideoPause() {
+                state.isPlaying = false;
+                elements.pauseBtn.innerHTML = '<i class="fas fa-play"></i><span>播放</span>';
+                showSuccess('媒体已暂停');
+            }
+
+            // 视频播放结束处理
+            function handleVideoEnded() {
+                state.isPlaying = false;
+                elements.pauseBtn.innerHTML = '<i class="fas fa-play"></i><span>播放</span>';
+                showSuccess('媒体播放结束');
             }
 
             // 显示错误消息
             function showError(message) {
-                topErrorMessage.textContent = message;
-                topErrorMessage.style.display = 'block';
-                topSuccessMessage.style.display = 'none';
+                elements.topErrorMessage.textContent = message;
+                elements.topErrorMessage.style.display = 'block';
+                elements.topSuccessMessage.style.display = 'none';
 
                 // 3秒后自动隐藏
                 setTimeout(() => {
-                    topErrorMessage.style.display = 'none';
+                    elements.topErrorMessage.style.display = 'none';
                 }, 3000);
             }
 
             // 显示成功消息
             function showSuccess(message) {
-                topSuccessMessage.textContent = message;
-                topSuccessMessage.style.display = 'block';
-                topErrorMessage.style.display = 'none';
+                elements.topSuccessMessage.textContent = message;
+                elements.topSuccessMessage.style.display = 'block';
+                elements.topErrorMessage.style.display = 'none';
 
                 // 3秒后自动隐藏
                 setTimeout(() => {
-                    topSuccessMessage.style.display = 'none';
+                    elements.topSuccessMessage.style.display = 'none';
                 }, 3000);
-            }
-
-            // 自定义M3U8 Loader用于过滤广告
-            class CustomHlsJsLoader extends Hls.DefaultConfig.loader {
-                constructor(config) {
-                    super(config);
-                    const load = this.load.bind(this);
-                    this.load = function (context, config, callbacks) {
-                        // 拦截manifest和level请求
-                        if (context.type === 'manifest' || context.type === 'level') {
-                            const onSuccess = callbacks.onSuccess;
-                            callbacks.onSuccess = function (response, stats, context) {
-                                // 如果是m3u8文件，处理内容以移除广告分段
-                                if (response.data && typeof response.data === 'string') {
-                                    // 过滤掉广告段 - 实现更精确的广告过滤逻辑
-                                    response.data = filterAdsFromM3U8(response.data, true);
-                                }
-                                return onSuccess(response, stats, context);
-                            };
-                        }
-                        // 执行原始load方法
-                        load(context, config, callbacks);
-                    };
-                }
-            }
-
-            // 过滤可疑的广告内容
-            function filterAdsFromM3U8(m3u8Content, strictMode = false) {
-                if (!m3u8Content) return '';
-
-                // 按行分割M3U8内容
-                const lines = m3u8Content.split('\n');
-                const filteredLines = [];
-
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i];
-
-                    // 只过滤#EXT-X-DISCONTINUITY标识
-                    if (!line.includes('#EXT-X-DISCONTINUITY')) {
-                        filteredLines.push(line);
-                    }
-                }
-
-                return filteredLines.join('\n');
             }
         });
     </script>
